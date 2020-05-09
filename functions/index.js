@@ -14,8 +14,8 @@ exports.sendPushNotification = functions.firestore
             return "not contamined";
         } else {
             console.log(` ${userID} contamined : ${status} `);
-            
-            let collectionRef = admin.firestore().collection("users/"+userID+"/meetings");
+
+            let collectionRef = admin.firestore().collection("users/" + userID + "/meetings");
             console.log(`Reference with name: ${collectionRef.path}`);
             let ids = [];
             //let today = new Date();
@@ -38,7 +38,7 @@ exports.sendPushNotification = functions.firestore
                         var message = {
                             notification: {
                                 title: 'TEST',
-                                body: 'i m testing if it works'
+                                body: 'm testing if it works after collections'
                             },
                             data: {
                                 id: userID,
@@ -62,3 +62,13 @@ exports.sendPushNotification = functions.firestore
 
 
     });
+
+exports.Count_meetings = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_added}").onCreate((snapshot, context)=> {
+    const user_id = context.params.user_id;
+    const metuser_id = context.params.metuser_id;
+    console.log("launching count_meetings");
+    const ref = admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
+    console.log(ref.path);
+    
+    return ref.update({ total_meets: admin.firestore.FieldValue.increment(1) });
+})
