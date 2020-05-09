@@ -70,5 +70,9 @@ exports.Count_meetings = functions.firestore.document("users/{user_id}/meetings/
     const ref = admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
     console.log(ref.path);
     
-    return ref.update({ total_meets: admin.firestore.FieldValue.increment(1) });
+        return ref.update({ total_meets: admin.firestore.FieldValue.increment(1) }).catch(error => {
+            console.log("setting first entry");
+            ref.set({ total_meets: admin.firestore.FieldValue.increment(1)});
+        });
+   
 })
