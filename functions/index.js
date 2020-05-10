@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 var admin = require("firebase-admin");
 
 admin.initializeApp();
+admin.firestore().settings( { timestampsInSnapshots: true });
 exports.sendPushNotification = functions.firestore
     .document('users/{userID}')
     .onUpdate((change, context) => {
@@ -63,16 +64,37 @@ exports.sendPushNotification = functions.firestore
 
     });
 
-exports.Count_meetings = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_added}").onCreate((snapshot, context)=> {
-    const user_id = context.params.user_id;
-    const metuser_id = context.params.metuser_id;
-    console.log("launching count_meetings");
-    const ref = admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
-    console.log(ref.path);
+
+    exports.count_meetings = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_added}").onCreate((snapshot, context) => {
+        const user_id = context.params.user_id;
+        const metuser_id = context.params.metuser_id;
+        console.log("launching count_meetings");
+        const ref = admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
+        console.log(ref.path);
     
         return ref.update({ total_meets: admin.firestore.FieldValue.increment(1) }).catch(error => {
-            console.log("setting first entry");
-            ref.set({ total_meets: admin.firestore.FieldValue.increment(1)});
+            console.log("setting first entry fot the counter ");
+            ref.set({ total_meets: admin.firestore.FieldValue.increment(1) });
         });
-   
-})
+    
+    });
+    exports.count_duration = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_updated}").onUpdate((change, context) => {
+        const user_id = context.params.user_id;
+        const metuser_id = context.params.metuser_id;
+        console.log("launching count_duration");
+        const ref =  admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
+        console.log(ref.path);
+        console.log("timestamp : "+change.before.data().foundTimestamp.toDate());
+        var foundTimestamp = change.before.data().foundTimestamp.toDate();
+        var lostTimestamp = change.after.data().lostTimestamp.toDate();
+        if (foundTimestamp === lostTimestamp || (foundTimestamp > lostTimestamp)) {
+            console.log("lostTimestamp is equal or bigger than foundTimestamp ");
+            return null;
+        } else {
+            var duration = Math.abs(lostTimestamp-foundTimestamp);
+            return ref.update({ total_duration:  admin.firestore.FieldValue.increment(duration) }).catch(error => {
+                console.log("setting first entry for the duration");
+                ref.set({ total_meets:  admin.firestore.FieldValue.increment(duration) });
+            });
+        }    
+    });
