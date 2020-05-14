@@ -2,7 +2,7 @@ const functions = require('firebase-functions');
 var admin = require("firebase-admin");
 
 admin.initializeApp();
-admin.firestore().settings( { timestampsInSnapshots: true });
+admin.firestore().settings({ timestampsInSnapshots: true });
 exports.sendPushNotification = functions.firestore
     .document('users/{userID}')
     .onUpdate((change, context) => {
@@ -18,16 +18,42 @@ exports.sendPushNotification = functions.firestore
 
             let collectionRef = admin.firestore().collection("users/" + userID + "/meetings");
             console.log(`Reference with name: ${collectionRef.path}`);
-            let ids = [];
-            //let today = new Date();
-            //today.setDate(today.getDate() - 14);
-            return collectionRef.get().then(collections => {
-                collections.forEach(collection => {
-                    console.log('Found subcollection with id:', collection.id);
-                    ids.push(collection.id);
-                });
-                return ids;
-            }).then((ids) => {
+            let today = new Date();
+
+            let getindexes = new Promise(function (resolve) {
+                let ids = [];
+                for (let index = 0; index < 14; index++) {
+                    var tosearch = new Date();
+                    tosearch.setDate(today.getDate() - index);
+                    var dd = tosearch.getDate();
+                    var mm = tosearch.getMonth() + 1;
+                    var yyyy = tosearch.getFullYear();
+                    if (dd < 10) {
+                        dd = '0' + dd;
+                    }
+
+                    if (mm < 10) {
+                        mm = '0' + mm;
+                    }
+                    tosearch = yyyy + "-" + mm + "-" + dd;
+
+                    collectionRef.doc(tosearch).listCollections().then(cols => {
+                        console.log(collectionRef.path + "/" + tosearch + " :  found");
+                        cols.forEach(doc => {
+                            console.log('Found subdoc with id:', collection.id);
+                            ids.push(collection.id);
+                        });
+                        resolve([... new Set(ids)]);
+                        return [... new Set(ids)];
+
+                    }).catch(error => {
+                        console.log(collectionRef.path + "/" + tosearch + " :  not found");
+
+                    });
+                }
+            });
+
+            return getindexes.then((ids) => {
                 console.log("IDs: " + ids);
                 return ids.forEach((e) => {
                     console.log("checking for user :" + e);
@@ -61,40 +87,62 @@ exports.sendPushNotification = functions.firestore
             });
         }
 
-
     });
 
+exports.count_meetings = functions.firestore.document('users/{user_id}/meetings/{date_meeting}/{metuser_id}/{meeting_added}').onCreate((snapshot, context) => {
+    const user_id = context.params.user_id;
+    const metuser_id = context.params.metuser_id;
+    const date_meeting = context.params.date_meeting;
+    const meeting_added = context.params.meeting_added;
 
-    exports.count_meetings = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_added}").onCreate((snapshot, context) => {
-        const user_id = context.params.user_id;
-        const metuser_id = context.params.metuser_id;
-        console.log("launching count_meetings");
-        const ref = admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
-        console.log(ref.path);
-    
-        return ref.update({ total_meets: admin.firestore.FieldValue.increment(1) }).catch(error => {
-            console.log("setting first entry fot the counter ");
-            ref.set({ total_meets: admin.firestore.FieldValue.increment(1) });
-        });
-    
-    });
-    exports.count_duration = functions.firestore.document("users/{user_id}/meetings/{metuser_id}/meeetings/{meeting_updated}").onUpdate((change, context) => {
-        const user_id = context.params.user_id;
-        const metuser_id = context.params.metuser_id;
-        console.log("launching count_duration");
-        const ref =  admin.firestore().collection("users/" + user_id + "/meetings").doc(metuser_id);
-        console.log(ref.path);
-        console.log("timestamp : "+change.before.data().foundTimestamp.toDate());
-        var foundTimestamp = change.before.data().foundTimestamp.toDate();
-        var lostTimestamp = change.after.data().lostTimestamp.toDate();
-        if (foundTimestamp === lostTimestamp || (foundTimestamp > lostTimestamp)) {
-            console.log("lostTimestamp is equal or bigger than foundTimestamp ");
-            return null;
-        } else {
-            var duration = Math.abs(lostTimestamp-foundTimestamp);
-            return ref.update({ total_duration:  admin.firestore.FieldValue.increment(duration) }).catch(error => {
+
+    console.log("launching count_meetings");
+    console.log("date = " + date_meeting);
+    if (meeting_added === "meeting_info")
+        return "just adding info";
+
+    const ref = admin.firestore().collection("users/" + user_id + "/meetings/" + date_meeting + "/" + metuser_id).doc("meeting_info");
+    console.log(ref.path);
+    const ref2 = admin.firestore().collection("users/" + user_id + "/meetings").doc(date_meeting);
+    console.log(ref2.path);
+
+    return ref.update({ total_meets: admin.firestore.FieldValue.increment(1), meeting_date: date_meeting }).catch(error => {
+        console.log("setting first entry fot the counter ");
+        ref.set({ total_meets: admin.firestore.FieldValue.increment(1), meeting_date: new Date(date_meeting) });
+    }).then(ref2.update({ total_meets: admin.firestore.FieldValue.increment(1) }).catch(error => {
+        console.log("setting first entry fot the counter ");
+        ref2.set({ total_meets: admin.firestore.FieldValue.increment(1) });
+
+    }));
+
+});
+exports.count_duration = functions.firestore.document('users/{user_id}/meetings/{date_meeting}/{metuser_id}/{meeting_updated}').onUpdate((change, context) => {
+    const user_id = context.params.user_id;
+    const metuser_id = context.params.metuser_id;
+    const date_meeting = context.params.date_meeting;
+    const meeting_updated = context.params.meeting_updated;
+    console.log("launching count_duration");
+    if (meeting_updated === "meeting_info")
+        return "just adding info";
+    const ref = admin.firestore().collection("users/" + user_id + "/meetings/" + date_meeting + "/" + metuser_id).doc("meeting_info");
+    const ref2 = admin.firestore().collection("users/" + user_id + "/meetings").doc(date_meeting);
+    console.log(ref.path);
+    console.log("timestamp : " + change.before.data().foundTimestamp.toDate());
+    var foundTimestamp = change.before.data().foundTimestamp.toDate();
+    var lostTimestamp = change.after.data().lostTimestamp.toDate();
+    if (foundTimestamp === lostTimestamp || (foundTimestamp > lostTimestamp)) {
+        console.log("lostTimestamp is equal or bigger than foundTimestamp ");
+        return null;
+    } else {
+        var duration = Math.abs(lostTimestamp - foundTimestamp);
+        return ref.update({ total_duration: admin.firestore.FieldValue.increment(duration) }).catch(error => {
+            console.log("setting first entry for the duration");
+            ref.set({ total_meets: admin.firestore.FieldValue.increment(duration) })
+
+        }).then(ref2.update({ total_duration: admin.firestore.FieldValue.increment(duration) })
+            .catch(error => {
                 console.log("setting first entry for the duration");
-                ref.set({ total_meets:  admin.firestore.FieldValue.increment(duration) });
-            });
-        }    
-    });
+                ref2.set({ total_duration: admin.firestore.FieldValue.increment(duration) });
+            }));
+    }
+});
