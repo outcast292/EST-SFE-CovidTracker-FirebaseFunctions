@@ -16,46 +16,57 @@ exports.sendPushNotification = functions.firestore
         } else {
             console.log(` ${userID} contamined : ${status} `);
 
-            let collectionRef = admin.firestore().collection("users/" + userID + "/meetings");
-            console.log(`Reference with name: ${collectionRef.path}`);
             let today = new Date();
-
-            let getindexes = new Promise(function (resolve) {
-                let ids = [];
-                for (let index = 0; index < 14; index++) {
-                    var tosearch = new Date();
-                    tosearch.setDate(today.getDate() - index);
-                    var dd = tosearch.getDate();
-                    var mm = tosearch.getMonth() + 1;
-                    var yyyy = tosearch.getFullYear();
-                    if (dd < 10) {
-                        dd = '0' + dd;
-                    }
-
-                    if (mm < 10) {
-                        mm = '0' + mm;
-                    }
-                    tosearch = yyyy + "-" + mm + "-" + dd;
-
-                    collectionRef.doc(tosearch).listCollections().then(cols => {
-                        console.log(collectionRef.path + "/" + tosearch + " :  found");
-                        cols.forEach(doc => {
-                            console.log('Found subdoc with id:', collection.id);
-                            ids.push(collection.id);
-                        });
-                        resolve([... new Set(ids)]);
-                        return [... new Set(ids)];
-
-                    }).catch(error => {
-                        console.log(collectionRef.path + "/" + tosearch + " :  not found");
-
-                    });
+            let ms_dates = [];
+            for (let index = 0; index <= 14; index++) {
+                var tosearch = new Date();
+                tosearch.setDate(today.getDate() - index);
+                var dd = tosearch.getDate();
+                var mm = tosearch.getMonth() + 1;
+                var yyyy = tosearch.getFullYear();
+                if (dd < 10) {
+                    dd = '0' + dd;
                 }
-            });
 
-            return getindexes.then((ids) => {
-                console.log("IDs: " + ids);
-                return ids.forEach((e) => {
+                if (mm < 10) {
+                    mm = '0' + mm;
+                }
+                tosearch = yyyy + "-" + mm + "-" + dd;
+                ms_dates.push(tosearch);
+
+            }
+            const refs = (ms_dates, callback) => {
+                let ids = ms_dates.map(id => {
+                    //console.log("date : " + id);
+                    var doc = admin.firestore().doc("users/" + userID + "/meetings/" + id);
+                    //console.log(doc.path);
+                    return doc.listCollections().then(docs => {
+                        const collectionIds = docs.map(col => col.id);
+                        //console.log(collectionIds);
+                        if (collectionIds.length === 0)
+                            return "x";
+                        else
+                            return collectionIds;
+                    });
+
+                });
+                Promise.all(ids)
+                    .then(docs => {
+                        //console.log("doc = " + docs[0]);
+                        //let items = docs.map(doc => doc.id);
+                        docs = docs.filter(el => el !== "x");
+                        docs = docs.map(el => String(el));
+                        docs = [...new Set(docs)];
+                        callback(docs);
+                        return true;
+                    })
+                    .catch(error => console.log(error));
+            }
+
+
+            return refs(ms_dates, items => {
+                console.log("finish : " + items);
+                return items.forEach((e) => {
                     console.log("checking for user :" + e);
                     let usersRef = admin.firestore().collection('users');
                     let documentRef = usersRef.doc(e);
